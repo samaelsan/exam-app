@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Select a VPC that allows instances to access the Internet.
+  SubnetId:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Select at least two subnets in the selected VPC, must be in 2 different
+      Availability Zones
+
+# DB Subnet Group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "Subnet group for Multi-AZ RDS"
+      SubnetIds:
+        !Ref SubnetId
+
+  # Security Group for RDS
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow MySQL access
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0  # Change this to restrict access
+
+  # AWS Secrets Manager Secret
+  RDSSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: RDSSecret
+      Description: "Stores the RDS database credentials"
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+
+  # RDS Multi-AZ Instance
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: exam-app-db
+      Engine: mysql
+      EngineVersion: "8.0"
+      DBInstanceClass: db.t3.medium
+      AllocatedStorage: 20
+      StorageType: gp2
+      MultiAZ: true
+      MasterUsername: !Sub "{{resolve:secretsmanager:${RDSSecret}::username}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${RDSSecret}::password}}"
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      BackupRetentionPeriod: 7
+      PubliclyAccessible: false
+
+Outputs:
+  RDSInstanceEndpoint:
+    Description: "The connection endpoint for RDS"
+    Value: !GetAtt RDSInstance.Endpoint.Address
