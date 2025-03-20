@@ -27,7 +27,7 @@ Parameters:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          CidrIp: 0.0.0.0/0  # Change this to restrict access
+          CidrIp: 0.0.0.0/0
 
   # AWS Secrets Manager Secret
   RDSSecret:
